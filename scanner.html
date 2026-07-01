@@ -4,347 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Attendance Scanner</title>
-
-  <!-- html5-qrcode: open-source QR/barcode scanning library -->
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="scanner.css" />
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
-  <style>
-    /* ── Reset & base ─────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:          #0f1117;
-      --surface:     #1c1f2a;
-      --border:      #2e3348;
-      --accent:      #4f8ef7;
-      --green:       #22c55e;
-      --red:         #ef4444;
-      --yellow:      #f59e0b;
-      --text:        #e8eaf0;
-      --text-muted:  #7a7f99;
-      --radius:      16px;
-      --font:        system-ui, -apple-system, sans-serif;
-    }
-
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      overflow: hidden;
-    }
-
-    /* ── Layout ───────────────────────────────────────────── */
-    #app {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      max-width: 700px;
-      margin: 0 auto;
-      padding: 12px;
-      gap: 12px;
-    }
-
-    /* ── Header ───────────────────────────────────────────── */
-    #header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 0;
-    }
-
-    #school-name {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: 0.02em;
-    }
-
-    #connection-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--yellow);
-      transition: background 0.3s;
-    }
-    #connection-dot.connected    { background: var(--green); }
-    #connection-dot.disconnected { background: var(--red); }
-
-    /* ── Camera viewport ──────────────────────────────────── */
-    #camera-wrap {
-      position: relative;
-      flex: 1 1 auto;
-      min-height: 0;
-      border-radius: var(--radius);
-      overflow: hidden;
-      background: #000;
-      border: 2px solid var(--border);
-    }
-
-    /* html5-qrcode injects its own div — we want it to fill */
-    #camera-wrap > div, #reader {
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Hide the default html5-qrcode UI chrome we don't need */
-    #reader__scan_region img,
-    #reader__dashboard,
-    #reader__dashboard_section_swaplink { display: none !important; }
-
-    #reader video {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover !important;
-    }
-
-    /* Scan-line animation overlay */
-    #scan-line {
-      position: absolute;
-      left: 10%; right: 10%;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      border-radius: 2px;
-      animation: scanline 2.4s ease-in-out infinite;
-      pointer-events: none;
-      z-index: 10;
-      top: 40%;
-    }
-
-    @keyframes scanline {
-      0%   { transform: translateY(-80px); opacity: 0; }
-      20%  { opacity: 1; }
-      80%  { opacity: 1; }
-      100% { transform: translateY(80px);  opacity: 0; }
-    }
-
-    /* Corner brackets */
-    #brackets {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 10;
-    }
-    .corner {
-      position: absolute;
-      width: 32px;
-      height: 32px;
-      border-color: var(--accent);
-      border-style: solid;
-      border-width: 0;
-      opacity: 0.8;
-    }
-    .corner.tl { top: 24px;    left: 24px;    border-top-width: 3px;    border-left-width: 3px;    border-radius: 4px 0 0 0; }
-    .corner.tr { top: 24px;    right: 24px;   border-top-width: 3px;    border-right-width: 3px;   border-radius: 0 4px 0 0; }
-    .corner.bl { bottom: 24px; left: 24px;    border-bottom-width: 3px; border-left-width: 3px;    border-radius: 0 0 0 4px; }
-    .corner.br { bottom: 24px; right: 24px;   border-bottom-width: 3px; border-right-width: 3px;   border-radius: 0 0 4px 0; }
-
-    /* ── Result card ──────────────────────────────────────── */
-    #result-card {
-      flex: 0 0 auto;
-      background: var(--surface);
-      border: 2px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px 24px;
-      min-height: 110px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      transition: border-color 0.3s, background 0.3s;
-    }
-
-    #result-card.state-idle    { border-color: var(--border); }
-    #result-card.state-ok      { border-color: var(--green);  background: #0f2d1c; }
-    #result-card.state-unknown { border-color: var(--yellow); background: #2a1f06; }
-    #result-card.state-error   { border-color: var(--red);    background: #2a0a0a; }
-    #result-card.state-loading { border-color: var(--accent); }
-
-    #result-label {
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    #result-name {
-      font-size: 2rem;
-      font-weight: 800;
-      line-height: 1.1;
-      color: var(--text);
-      word-break: break-word;
-    }
-
-    #result-meta {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    /* ── Recent scans list ────────────────────────────────── */
-    #recents-wrap {
-      flex: 0 0 auto;
-    }
-
-    #recents-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    #recents-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      max-height: 120px;
-      overflow-y: auto;
-    }
-
-    #recents-list li {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 0.82rem;
-    }
-
-    #recents-list li .r-name  { font-weight: 600; }
-    #recents-list li .r-time  { color: var(--text-muted); font-size: 0.75rem; }
-    #recents-list li.r-ok      { border-left: 3px solid var(--green); }
-    #recents-list li.r-unknown { border-left: 3px solid var(--yellow); }
-    #recents-list li.r-error   { border-left: 3px solid var(--red); }
-
-    /* ── Settings panel ───────────────────────────────────── */
-    #settings-btn {
-      position: fixed;
-      bottom: 14px;
-      right: 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 50%;
-      width: 44px; height: 44px;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      font-size: 1.2rem;
-      z-index: 100;
-      color: var(--text-muted);
-    }
-
-    #settings-panel {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
-    }
-    #settings-panel.open { display: flex; }
-
-    #settings-inner {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 28px 24px;
-      width: min(90vw, 420px);
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    #settings-inner h2 {
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-
-    .field label {
-      display: block;
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      margin-bottom: 5px;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .field input, .field select {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 0.9rem;
-      padding: 9px 12px;
-      outline: none;
-      font-family: var(--font);
-    }
-    .field input:focus { border-color: var(--accent); }
-
-    .field .hint {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    #settings-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-    }
-
-    button.btn {
-      padding: 9px 20px;
-      border-radius: 8px;
-      border: none;
-      font-size: 0.88rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: var(--font);
-    }
-    button.btn-primary { background: var(--accent); color: #fff; }
-    button.btn-ghost   { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
-
-    #test-btn {
-      padding: 7px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 0.78rem;
-      cursor: pointer;
-      font-family: var(--font);
-    }
-
-    #camera-status {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--text-muted);
-      font-size: 0.9rem;
-    }
-  </style>
 </head>
 <body>
 
 <div id="app">
 
-  <!-- Header -->
   <div id="header">
     <span id="school-name-display">Attendance Scanner</span>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span id="connection-label" style="font-size:0.75rem; color:var(--text-muted);">checking…</span>
+    <div id="connection-status">
+      <span id="connection-label">checking…</span>
       <div id="connection-dot"></div>
     </div>
   </div>
 
-  <!-- Camera -->
   <div id="camera-wrap">
     <div id="reader"></div>
     <div id="scan-line"></div>
@@ -356,31 +31,23 @@
     </div>
   </div>
 
-  <!-- Result card -->
   <div id="result-card" class="state-idle">
     <div id="result-label">LAST SCAN</div>
-    <div id="result-name" style="color:var(--text-muted); font-size:1.1rem; font-weight:400;">
-      Waiting for scan…
-    </div>
+    <div id="result-name">Waiting for scan…</div>
     <div id="result-meta"></div>
   </div>
 
-  <!-- Recent scans -->
   <div id="recents-wrap">
     <div id="recents-label">Recent Check-ins</div>
     <ul id="recents-list">
-      <li style="color:var(--text-muted); font-size:0.8rem; border:none; background:none;">
-        No scans yet today.
-      </li>
+      <li><span class="r-name">No scans yet today.</span></li>
     </ul>
   </div>
 
 </div>
 
-<!-- Settings button -->
 <div id="settings-btn" title="Settings">⚙</div>
 
-<!-- Settings panel -->
 <div id="settings-panel">
   <div id="settings-inner">
     <h2>Scanner Settings</h2>
@@ -388,18 +55,13 @@
     <div class="field">
       <label>Backend URL</label>
       <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/…/exec" />
-      <div class="hint">
-        Paste your Google Apps Script deployment URL here.
-        See the setup guide for how to get this URL.
-      </div>
+      <div class="hint">Paste your Google Apps Script deployment URL here.</div>
     </div>
 
     <div class="field">
       <label>School Name</label>
       <input type="text" id="cfg-school" placeholder="My School" />
-      <div class="hint">
-        Must match exactly what you enter in the QR Generator.
-      </div>
+      <div class="hint">Must match exactly what you enter in the QR Generator.</div>
     </div>
 
     <div class="field">
@@ -410,21 +72,20 @@
       </select>
     </div>
 
-    <div style="display:flex; align-items:center; gap:10px;">
-      <button id="test-btn">Test Connection</button>
-      <span id="test-result" style="font-size:0.78rem; color:var(--text-muted);"></span>
+    <div class="actions">
+      <button class="btn-ghost" id="test-btn">Test Connection</button>
+      <span id="test-result"></span>
     </div>
 
-    <div id="settings-actions">
-      <button class="btn btn-ghost" id="settings-cancel">Cancel</button>
-      <button class="btn btn-primary" id="settings-save">Save & Restart Scanner</button>
+    <div class="actions">
+      <button class="btn-ghost"    id="settings-cancel">Cancel</button>
+      <button class="btn-primary"  id="settings-save">Save &amp; Restart Scanner</button>
     </div>
   </div>
 </div>
 
 <script>
 // ── Config ────────────────────────────────────────────────────
-// Default values — user can override in Settings panel.
 var CONFIG_KEY = "attendance_scanner_config";
 
 function loadConfig() {
@@ -442,11 +103,11 @@ function saveConfig(cfg) {
 var cfg = loadConfig();
 
 // ── State ─────────────────────────────────────────────────────
-var scanner         = null;
+var scanner          = null;
 var lastScannedValue = "";
-var cooldownMs      = 3000; // ms to ignore re-scans of same code
-var lastScanTime    = 0;
-var recents         = [];   // [{name, time, state}]
+var cooldownMs       = 3000;
+var lastScanTime     = 0;
+var recents          = [];
 
 // ── DOM refs ──────────────────────────────────────────────────
 var elSchoolDisplay  = document.getElementById("school-name-display");
@@ -467,12 +128,12 @@ var elTestResult     = document.getElementById("test-result");
 var elSettingsSave   = document.getElementById("settings-save");
 var elSettingsCancel = document.getElementById("settings-cancel");
 
-// ── Startup ───────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────
 function init() {
   elSchoolDisplay.textContent = cfg.school || "Attendance Scanner";
 
   if (!cfg.url) {
-    showNeedsSetup();
+    setResultState("idle", "Tap ⚙ to enter your backend URL.", "", "");
     openSettings();
     return;
   }
@@ -481,29 +142,14 @@ function init() {
   startScanner();
 }
 
-function showNeedsSetup() {
-  elResultName.textContent = "Tap ⚙ to enter your backend URL.";
-  elResultName.style.color = "var(--text-muted)";
-  elResultName.style.fontSize = "0.95rem";
-}
-
-// ── Backend ping ──────────────────────────────────────────────
+// ── Connection state ──────────────────────────────────────────
 function pingBackend() {
   if (!cfg.url) return;
   setConnectionState("checking");
-
   fetch(cfg.url + "?action=ping")
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.status === "ok") {
-        setConnectionState("connected");
-      } else {
-        setConnectionState("disconnected");
-      }
-    })
-    .catch(function() {
-      setConnectionState("disconnected");
-    });
+    .then(function(d) { setConnectionState(d.status === "ok" ? "connected" : "disconnected"); })
+    .catch(function()  { setConnectionState("disconnected"); });
 }
 
 function setConnectionState(state) {
@@ -521,21 +167,15 @@ function setConnectionState(state) {
 
 // ── QR Scanner ────────────────────────────────────────────────
 function startScanner() {
-  if (scanner) {
-    scanner.clear().catch(function(){});
-    scanner = null;
-  }
+  if (scanner) { scanner.clear().catch(function(){}); scanner = null; }
 
   scanner = new Html5Qrcode("reader");
 
-  var facingMode = cfg.camera || "environment";
-
   scanner.start(
-    { facingMode: facingMode },
+    { facingMode: cfg.camera || "environment" },
     {
       fps: 10,
       qrbox: function(w, h) {
-        // Scan box: 70% of the smaller dimension
         var side = Math.min(w, h) * 0.70;
         return { width: side, height: side };
       },
@@ -543,153 +183,106 @@ function startScanner() {
       disableFlip: false
     },
     onScanSuccess,
-    onScanFailure
+    function() {} // onScanFailure fires constantly when no code visible — ignore
   ).catch(function(err) {
-    elResultName.textContent = "Camera error: " + err;
-    elResultName.style.fontSize = "0.85rem";
-    elResultName.style.color = "var(--red)";
+    setResultState("error", "Camera error: " + err, "", "");
   });
 }
 
 function onScanSuccess(decodedText) {
   var now = Date.now();
-
-  // Cooldown: ignore same code scanned within cooldownMs
-  if (decodedText === lastScannedValue && (now - lastScanTime) < cooldownMs) {
-    return;
-  }
+  if (decodedText === lastScannedValue && (now - lastScanTime) < cooldownMs) return;
 
   lastScannedValue = decodedText;
-  lastScanTime = now;
+  lastScanTime     = now;
 
-  showLoading(decodedText);
+  setResultState("loading", decodedText.length > 40 ? decodedText.substring(0, 40) + "…" : decodedText, "", "");
   sendToBackend(decodedText);
 }
 
-function onScanFailure() {
-  // Fires constantly when no code is visible — ignore silently.
-}
-
-// ── Send scan to backend ──────────────────────────────────────
+// ── Backend communication ─────────────────────────────────────
 function sendToBackend(qrValue) {
   if (!cfg.url) {
-    showResult("error", qrValue, "No backend URL configured.", "");
+    setResultState("error", "No backend URL configured.", "", "");
     return;
   }
 
-  var url = cfg.url +
-    "?action=scan" +
-    "&qrValue=" + encodeURIComponent(qrValue);
-
-  fetch(url)
+  fetch(cfg.url + "?action=scan&qrValue=" + encodeURIComponent(qrValue))
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      setConnectionState("connected");
       if (data.status === "ok") {
-        showResult("ok", data.studentName, data.grade || "", data.timestamp || "");
+        setResultState("ok", data.studentName, data.grade || "", data.timestamp || "");
         addRecent(data.studentName, "ok");
       } else if (data.status === "unknown") {
-        showResult("unknown", data.studentName, "Not on student list — logged anyway", "");
+        setResultState("unknown", data.studentName, "Not on student list — logged anyway", "");
         addRecent(data.studentName, "unknown");
       } else {
-        showResult("error", "Error", data.message || "Unknown error", "");
+        setResultState("error", "Error", data.message || "Unknown error", "");
         addRecent("Error", "error");
       }
-      setConnectionState("connected");
     })
-    .catch(function(err) {
-      showResult("error", "Connection failed", "Could not reach backend.", "");
+    .catch(function() {
       setConnectionState("disconnected");
+      setResultState("error", "Connection failed", "Could not reach backend.", "");
     });
 }
 
-// ── UI updates ────────────────────────────────────────────────
-function showLoading(qrValue) {
-  elResultCard.className = "state-loading";
-  elResultLabel.textContent = "SCANNING…";
-  elResultName.textContent = qrValue.length > 40 ? qrValue.substring(0, 40) + "…" : qrValue;
-  elResultName.style.fontSize = "1rem";
-  elResultName.style.color = "var(--accent)";
-  elResultName.style.fontWeight = "400";
-  elResultMeta.textContent = "";
-}
+// ── Result card ───────────────────────────────────────────────
+var resetTimer = null;
 
-function showResult(state, name, meta, timestamp) {
+function setResultState(state, name, meta, timestamp) {
   elResultCard.className = "state-" + state;
-  elResultLabel.textContent = state === "ok"      ? "✓ CHECKED IN" :
-                               state === "unknown" ? "⚠ UNKNOWN STUDENT" :
-                                                     "✗ ERROR";
-  elResultName.style.fontSize = "2rem";
-  elResultName.style.fontWeight = "800";
 
-  if (state === "ok") {
-    elResultName.style.color = "var(--green)";
-  } else if (state === "unknown") {
-    elResultName.style.color = "var(--yellow)";
-  } else {
-    elResultName.style.color = "var(--red)";
-  }
+  elResultLabel.textContent =
+    state === "ok"      ? "✓ CHECKED IN"      :
+    state === "unknown" ? "⚠ UNKNOWN STUDENT" :
+    state === "error"   ? "✗ ERROR"            :
+    state === "loading" ? "SCANNING…"          :
+                          "LAST SCAN";
 
   elResultName.textContent = name;
-  elResultMeta.textContent = meta + (timestamp ? "  ·  " + formatTime(timestamp) : "");
 
-  // Auto-reset to idle after 4 seconds
-  setTimeout(function() {
-    if (elResultCard.className !== "state-loading") {
-      resetResultCard();
+  var metaText = meta;
+  if (timestamp) {
+    var parts = timestamp.split(" ");
+    if (parts.length > 1) {
+      var t = parts[1].split(":");
+      metaText += "  ·  " + t[0] + ":" + t[1];
     }
-  }, 4000);
-}
-
-function resetResultCard() {
-  elResultCard.className = "state-idle";
-  elResultLabel.textContent = "LAST SCAN";
-  elResultName.textContent = "Waiting for scan…";
-  elResultName.style.color = "var(--text-muted)";
-  elResultName.style.fontSize = "1.1rem";
-  elResultName.style.fontWeight = "400";
-  elResultMeta.textContent = "";
-}
-
-function formatTime(ts) {
-  // ts is "yyyy-MM-dd HH:mm:ss" — show only HH:mm
-  var parts = ts.split(" ");
-  if (parts.length > 1) {
-    var timeParts = parts[1].split(":");
-    return timeParts[0] + ":" + timeParts[1];
   }
-  return ts;
+  elResultMeta.textContent = metaText;
+
+  // Auto-reset to idle after 4 seconds for non-loading states
+  if (resetTimer) clearTimeout(resetTimer);
+  if (state !== "loading") {
+    resetTimer = setTimeout(function() {
+      setResultState("idle", "Waiting for scan…", "", "");
+    }, 4000);
+  }
 }
 
-// ── Recents list ──────────────────────────────────────────────
+// ── Recent scans ──────────────────────────────────────────────
 function addRecent(name, state) {
   var now = new Date();
-  var timeStr = now.getHours().toString().padStart(2, "0") + ":" +
-                now.getMinutes().toString().padStart(2, "0");
-
-  recents.unshift({ name: name, time: timeStr, state: state });
+  var t   = now.getHours().toString().padStart(2, "0") + ":" +
+            now.getMinutes().toString().padStart(2, "0");
+  recents.unshift({ name: name, time: t, state: state });
   if (recents.length > 8) recents.pop();
-
   renderRecents();
 }
 
 function renderRecents() {
-  if (recents.length === 0) {
-    elRecentsList.innerHTML = '<li style="color:var(--text-muted);font-size:0.8rem;border:none;background:none;">No scans yet today.</li>';
-    return;
-  }
   elRecentsList.innerHTML = recents.map(function(r) {
     return '<li class="r-' + r.state + '">' +
-           '<span class="r-name">' + escHtml(r.name) + '</span>' +
+           '<span class="r-name">' + esc(r.name) + '</span>' +
            '<span class="r-time">' + r.time + '</span>' +
            '</li>';
-  }).join("");
+  }).join("") || '<li><span class="r-name">No scans yet today.</span></li>';
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
 // ── Settings panel ────────────────────────────────────────────
@@ -697,8 +290,9 @@ function openSettings() {
   elCfgUrl.value    = cfg.url    || "";
   elCfgSchool.value = cfg.school || "";
   elCfgCamera.value = cfg.camera || "environment";
-  elSettingsPanel.classList.add("open");
   elTestResult.textContent = "";
+  elTestResult.className   = "";
+  elSettingsPanel.classList.add("open");
 }
 
 function closeSettings() {
@@ -723,26 +317,26 @@ elTestBtn.addEventListener("click", function() {
   var testUrl = elCfgUrl.value.trim();
   if (!testUrl) {
     elTestResult.textContent = "Enter a URL first.";
-    elTestResult.style.color = "var(--red)";
+    elTestResult.className   = "fail";
     return;
   }
   elTestResult.textContent = "Testing…";
-  elTestResult.style.color = "var(--text-muted)";
+  elTestResult.className   = "";
 
   fetch(testUrl + "?action=ping")
     .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.status === "ok") {
+    .then(function(d) {
+      if (d.status === "ok") {
         elTestResult.textContent = "✓ Connected!";
-        elTestResult.style.color = "var(--green)";
+        elTestResult.className   = "ok";
       } else {
-        elTestResult.textContent = "Got response but status was: " + data.status;
-        elTestResult.style.color = "var(--yellow)";
+        elTestResult.textContent = "Response received but status: " + d.status;
+        elTestResult.className   = "warn";
       }
     })
-    .catch(function(err) {
+    .catch(function() {
       elTestResult.textContent = "✗ Could not connect.";
-      elTestResult.style.color = "var(--red)";
+      elTestResult.className   = "fail";
     });
 });
 

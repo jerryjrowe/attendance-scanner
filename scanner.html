@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Attendance Scanner</title>
+
+  <!-- html5-qrcode: open-source QR/barcode scanning library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0f1117;
+      --surface:     #1c1f2a;
+      --border:      #2e3348;
+      --accent:      #4f8ef7;
+      --green:       #22c55e;
+      --red:         #ef4444;
+      --yellow:      #f59e0b;
+      --text:        #e8eaf0;
+      --text-muted:  #7a7f99;
+      --radius:      16px;
+      --font:        system-ui, -apple-system, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 12px;
+      gap: 12px;
+    }
+
+    /* ── Header ───────────────────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    #school-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    #connection-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--yellow);
+      transition: background 0.3s;
+    }
+    #connection-dot.connected    { background: var(--green); }
+    #connection-dot.disconnected { background: var(--red); }
+
+    /* ── Camera viewport ──────────────────────────────────── */
+    #camera-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #000;
+      border: 2px solid var(--border);
+    }
+
+    /* html5-qrcode injects its own div — we want it to fill */
+    #camera-wrap > div, #reader {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Hide the default html5-qrcode UI chrome we don't need */
+    #reader__scan_region img,
+    #reader__dashboard,
+    #reader__dashboard_section_swaplink { display: none !important; }
+
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+    }
+
+    /* Scan-line animation overlay */
+    #scan-line {
+      position: absolute;
+      left: 10%; right: 10%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      border-radius: 2px;
+      animation: scanline 2.4s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 10;
+      top: 40%;
+    }
+
+    @keyframes scanline {
+      0%   { transform: translateY(-80px); opacity: 0; }
+      20%  { opacity: 1; }
+      80%  { opacity: 1; }
+      100% { transform: translateY(80px);  opacity: 0; }
+    }
+
+    /* Corner brackets */
+    #brackets {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .corner {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: var(--accent);
+      border-style: solid;
+      border-width: 0;
+      opacity: 0.8;
+    }
+    .corner.tl { top: 24px;    left: 24px;    border-top-width: 3px;    border-left-width: 3px;    border-radius: 4px 0 0 0; }
+    .corner.tr { top: 24px;    right: 24px;   border-top-width: 3px;    border-right-width: 3px;   border-radius: 0 4px 0 0; }
+    .corner.bl { bottom: 24px; left: 24px;    border-bottom-width: 3px; border-left-width: 3px;    border-radius: 0 0 0 4px; }
+    .corner.br { bottom: 24px; right: 24px;   border-bottom-width: 3px; border-right-width: 3px;   border-radius: 0 0 4px 0; }
+
+    /* ── Result card ──────────────────────────────────────── */
+    #result-card {
+      flex: 0 0 auto;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    #result-card.state-idle    { border-color: var(--border); }
+    #result-card.state-ok      { border-color: var(--green);  background: #0f2d1c; }
+    #result-card.state-unknown { border-color: var(--yellow); background: #2a1f06; }
+    #result-card.state-error   { border-color: var(--red);    background: #2a0a0a; }
+    #result-card.state-loading { border-color: var(--accent); }
+
+    #result-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    #result-name {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.1;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    #result-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* ── Recent scans list ────────────────────────────────── */
+    #recents-wrap {
+      flex: 0 0 auto;
+    }
+
+    #recents-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    #recents-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    #recents-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
+    }
+
+    #recents-list li .r-name  { font-weight: 600; }
+    #recents-list li .r-time  { color: var(--text-muted); font-size: 0.75rem; }
+    #recents-list li.r-ok      { border-left: 3px solid var(--green); }
+    #recents-list li.r-unknown { border-left: 3px solid var(--yellow); }
+    #recents-list li.r-error   { border-left: 3px solid var(--red); }
+
+    /* ── Settings panel ───────────────────────────────────── */
+    #settings-btn {
+      position: fixed;
+      bottom: 14px;
+      right: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      z-index: 100;
+      color: var(--text-muted);
+    }
+
+    #settings-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #settings-panel.open { display: flex; }
+
+    #settings-inner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      width: min(90vw, 420px);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    #settings-inner h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .field input, .field select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+      padding: 9px 12px;
+      outline: none;
+      font-family: var(--font);
+    }
+    .field input:focus { border-color: var(--accent); }
+
+    .field .hint {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    #settings-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    button.btn {
+      padding: 9px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font);
+    }
+    button.btn-primary { background: var(--accent); color: #fff; }
+    button.btn-ghost   { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+
+    #test-btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-family: var(--font);
+    }
+
+    #camera-status {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <span id="school-name-display">Attendance Scanner</span>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span id="connection-label" style="font-size:0.75rem; color:var(--text-muted);">checking…</span>
+      <div id="connection-dot"></div>
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div id="camera-wrap">
+    <div id="reader"></div>
+    <div id="scan-line"></div>
+    <div id="brackets">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
+  </div>
+
+  <!-- Result card -->
+  <div id="result-card" class="state-idle">
+    <div id="result-label">LAST SCAN</div>
+    <div id="result-name" style="color:var(--text-muted); font-size:1.1rem; font-weight:400;">
+      Waiting for scan…
+    </div>
+    <div id="result-meta"></div>
+  </div>
+
+  <!-- Recent scans -->
+  <div id="recents-wrap">
+    <div id="recents-label">Recent Check-ins</div>
+    <ul id="recents-list">
+      <li style="color:var(--text-muted); font-size:0.8rem; border:none; background:none;">
+        No scans yet today.
+      </li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- Settings button -->
+<div id="settings-btn" title="Settings">⚙</div>
+
+<!-- Settings panel -->
+<div id="settings-panel">
+  <div id="settings-inner">
+    <h2>Scanner Settings</h2>
+
+    <div class="field">
+      <label>Backend URL</label>
+      <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/…/exec" />
+      <div class="hint">
+        Paste your Google Apps Script deployment URL here.
+        See the setup guide for how to get this URL.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>School Name</label>
+      <input type="text" id="cfg-school" placeholder="My School" />
+      <div class="hint">
+        Must match exactly what you enter in the QR Generator.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Camera</label>
+      <select id="cfg-camera">
+        <option value="environment">Back camera (recommended)</option>
+        <option value="user">Front camera</option>
+      </select>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button id="test-btn">Test Connection</button>
+      <span id="test-result" style="font-size:0.78rem; color:var(--text-muted);"></span>
+    </div>
+
+    <div id="settings-actions">
+      <button class="btn btn-ghost" id="settings-cancel">Cancel</button>
+      <button class="btn btn-primary" id="settings-save">Save & Restart Scanner</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+// Default values — user can override in Settings panel.
+var CONFIG_KEY = "attendance_scanner_config";
+
+function loadConfig() {
+  try {
+    var raw = localStorage.getItem(CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { url: "", school: "My School", camera: "environment" };
+}
+
+function saveConfig(cfg) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+var cfg = loadConfig();
+
+// ── State ─────────────────────────────────────────────────────
+var scanner         = null;
+var lastScannedValue = "";
+var cooldownMs      = 3000; // ms to ignore re-scans of same code
+var lastScanTime    = 0;
+var recents         = [];   // [{name, time, state}]
+
+// ── DOM refs ──────────────────────────────────────────────────
+var elSchoolDisplay  = document.getElementById("school-name-display");
+var elConnectionDot  = document.getElementById("connection-dot");
+var elConnectionLbl  = document.getElementById("connection-label");
+var elResultCard     = document.getElementById("result-card");
+var elResultLabel    = document.getElementById("result-label");
+var elResultName     = document.getElementById("result-name");
+var elResultMeta     = document.getElementById("result-meta");
+var elRecentsList    = document.getElementById("recents-list");
+var elSettingsBtn    = document.getElementById("settings-btn");
+var elSettingsPanel  = document.getElementById("settings-panel");
+var elCfgUrl         = document.getElementById("cfg-url");
+var elCfgSchool      = document.getElementById("cfg-school");
+var elCfgCamera      = document.getElementById("cfg-camera");
+var elTestBtn        = document.getElementById("test-btn");
+var elTestResult     = document.getElementById("test-result");
+var elSettingsSave   = document.getElementById("settings-save");
+var elSettingsCancel = document.getElementById("settings-cancel");
+
+// ── Startup ───────────────────────────────────────────────────
+function init() {
+  elSchoolDisplay.textContent = cfg.school || "Attendance Scanner";
+
+  if (!cfg.url) {
+    showNeedsSetup();
+    openSettings();
+    return;
+  }
+
+  pingBackend();
+  startScanner();
+}
+
+function showNeedsSetup() {
+  elResultName.textContent = "Tap ⚙ to enter your backend URL.";
+  elResultName.style.color = "var(--text-muted)";
+  elResultName.style.fontSize = "0.95rem";
+}
+
+// ── Backend ping ──────────────────────────────────────────────
+function pingBackend() {
+  if (!cfg.url) return;
+  setConnectionState("checking");
+
+  fetch(cfg.url + "?action=ping")
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === "ok") {
+        setConnectionState("connected");
+      } else {
+        setConnectionState("disconnected");
+      }
+    })
+    .catch(function() {
+      setConnectionState("disconnected");
+    });
+}
+
+function setConnectionState(state) {
+  elConnectionDot.className = "";
+  if (state === "connected") {
+    elConnectionDot.classList.add("connected");
+    elConnectionLbl.textContent = "connected";
+  } else if (state === "disconnected") {
+    elConnectionDot.classList.add("disconnected");
+    elConnectionLbl.textContent = "offline";
+  } else {
+    elConnectionLbl.textContent = "checking…";
+  }
+}
+
+// ── QR Scanner ────────────────────────────────────────────────
+function startScanner() {
+  if (scanner) {
+    scanner.clear().catch(function(){});
+    scanner = null;
+  }
+
+  scanner = new Html5Qrcode("reader");
+
+  var facingMode = cfg.camera || "environment";
+
+  scanner.start(
+    { facingMode: facingMode },
+    {
+      fps: 10,
+      qrbox: function(w, h) {
+        // Scan box: 70% of the smaller dimension
+        var side = Math.min(w, h) * 0.70;
+        return { width: side, height: side };
+      },
+      aspectRatio: 1.0,
+      disableFlip: false
+    },
+    onScanSuccess,
+    onScanFailure
+  ).catch(function(err) {
+    elResultName.textContent = "Camera error: " + err;
+    elResultName.style.fontSize = "0.85rem";
+    elResultName.style.color = "var(--red)";
+  });
+}
+
+function onScanSuccess(decodedText) {
+  var now = Date.now();
+
+  // Cooldown: ignore same code scanned within cooldownMs
+  if (decodedText === lastScannedValue && (now - lastScanTime) < cooldownMs) {
+    return;
+  }
+
+  lastScannedValue = decodedText;
+  lastScanTime = now;
+
+  showLoading(decodedText);
+  sendToBackend(decodedText);
+}
+
+function onScanFailure() {
+  // Fires constantly when no code is visible — ignore silently.
+}
+
+// ── Send scan to backend ──────────────────────────────────────
+function sendToBackend(qrValue) {
+  if (!cfg.url) {
+    showResult("error", qrValue, "No backend URL configured.", "");
+    return;
+  }
+
+  var url = cfg.url +
+    "?action=scan" +
+    "&qrValue=" + encodeURIComponent(qrValue);
+
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === "ok") {
+        showResult("ok", data.studentName, data.grade || "", data.timestamp || "");
+        addRecent(data.studentName, "ok");
+      } else if (data.status === "unknown") {
+        showResult("unknown", data.studentName, "Not on student list — logged anyway", "");
+        addRecent(data.studentName, "unknown");
+      } else {
+        showResult("error", "Error", data.message || "Unknown error", "");
+        addRecent("Error", "error");
+      }
+      setConnectionState("connected");
+    })
+    .catch(function(err) {
+      showResult("error", "Connection failed", "Could not reach backend.", "");
+      setConnectionState("disconnected");
+    });
+}
+
+// ── UI updates ────────────────────────────────────────────────
+function showLoading(qrValue) {
+  elResultCard.className = "state-loading";
+  elResultLabel.textContent = "SCANNING…";
+  elResultName.textContent = qrValue.length > 40 ? qrValue.substring(0, 40) + "…" : qrValue;
+  elResultName.style.fontSize = "1rem";
+  elResultName.style.color = "var(--accent)";
+  elResultName.style.fontWeight = "400";
+  elResultMeta.textContent = "";
+}
+
+function showResult(state, name, meta, timestamp) {
+  elResultCard.className = "state-" + state;
+  elResultLabel.textContent = state === "ok"      ? "✓ CHECKED IN" :
+                               state === "unknown" ? "⚠ UNKNOWN STUDENT" :
+                                                     "✗ ERROR";
+  elResultName.style.fontSize = "2rem";
+  elResultName.style.fontWeight = "800";
+
+  if (state === "ok") {
+    elResultName.style.color = "var(--green)";
+  } else if (state === "unknown") {
+    elResultName.style.color = "var(--yellow)";
+  } else {
+    elResultName.style.color = "var(--red)";
+  }
+
+  elResultName.textContent = name;
+  elResultMeta.textContent = meta + (timestamp ? "  ·  " + formatTime(timestamp) : "");
+
+  // Auto-reset to idle after 4 seconds
+  setTimeout(function() {
+    if (elResultCard.className !== "state-loading") {
+      resetResultCard();
+    }
+  }, 4000);
+}
+
+function resetResultCard() {
+  elResultCard.className = "state-idle";
+  elResultLabel.textContent = "LAST SCAN";
+  elResultName.textContent = "Waiting for scan…";
+  elResultName.style.color = "var(--text-muted)";
+  elResultName.style.fontSize = "1.1rem";
+  elResultName.style.fontWeight = "400";
+  elResultMeta.textContent = "";
+}
+
+function formatTime(ts) {
+  // ts is "yyyy-MM-dd HH:mm:ss" — show only HH:mm
+  var parts = ts.split(" ");
+  if (parts.length > 1) {
+    var timeParts = parts[1].split(":");
+    return timeParts[0] + ":" + timeParts[1];
+  }
+  return ts;
+}
+
+// ── Recents list ──────────────────────────────────────────────
+function addRecent(name, state) {
+  var now = new Date();
+  var timeStr = now.getHours().toString().padStart(2, "0") + ":" +
+                now.getMinutes().toString().padStart(2, "0");
+
+  recents.unshift({ name: name, time: timeStr, state: state });
+  if (recents.length > 8) recents.pop();
+
+  renderRecents();
+}
+
+function renderRecents() {
+  if (recents.length === 0) {
+    elRecentsList.innerHTML = '<li style="color:var(--text-muted);font-size:0.8rem;border:none;background:none;">No scans yet today.</li>';
+    return;
+  }
+  elRecentsList.innerHTML = recents.map(function(r) {
+    return '<li class="r-' + r.state + '">' +
+           '<span class="r-name">' + escHtml(r.name) + '</span>' +
+           '<span class="r-time">' + r.time + '</span>' +
+           '</li>';
+  }).join("");
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// ── Settings panel ────────────────────────────────────────────
+function openSettings() {
+  elCfgUrl.value    = cfg.url    || "";
+  elCfgSchool.value = cfg.school || "";
+  elCfgCamera.value = cfg.camera || "environment";
+  elSettingsPanel.classList.add("open");
+  elTestResult.textContent = "";
+}
+
+function closeSettings() {
+  elSettingsPanel.classList.remove("open");
+}
+
+elSettingsBtn.addEventListener("click", openSettings);
+elSettingsCancel.addEventListener("click", closeSettings);
+
+elSettingsSave.addEventListener("click", function() {
+  cfg.url    = elCfgUrl.value.trim();
+  cfg.school = elCfgSchool.value.trim() || "My School";
+  cfg.camera = elCfgCamera.value;
+  saveConfig(cfg);
+  elSchoolDisplay.textContent = cfg.school;
+  closeSettings();
+  pingBackend();
+  startScanner();
+});
+
+elTestBtn.addEventListener("click", function() {
+  var testUrl = elCfgUrl.value.trim();
+  if (!testUrl) {
+    elTestResult.textContent = "Enter a URL first.";
+    elTestResult.style.color = "var(--red)";
+    return;
+  }
+  elTestResult.textContent = "Testing…";
+  elTestResult.style.color = "var(--text-muted)";
+
+  fetch(testUrl + "?action=ping")
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.status === "ok") {
+        elTestResult.textContent = "✓ Connected!";
+        elTestResult.style.color = "var(--green)";
+      } else {
+        elTestResult.textContent = "Got response but status was: " + data.status;
+        elTestResult.style.color = "var(--yellow)";
+      }
+    })
+    .catch(function(err) {
+      elTestResult.textContent = "✗ Could not connect.";
+      elTestResult.style.color = "var(--red)";
+    });
+});
+
+// ── Go ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

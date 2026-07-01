@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Code Generator — Student Attendance Cards</title>
+
+  <!-- QRCode.js: open-source, no server needed, pure client-side -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f6fa;
+      --surface:   #ffffff;
+      --border:    #dde1f0;
+      --accent:    #4f8ef7;
+      --text:      #1c1f2a;
+      --text-muted:#7a7f99;
+      --radius:    12px;
+      --font:      system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      padding: 24px 16px 48px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 28px;
+    }
+
+    /* ── Controls ───────────────────────────────────────────── */
+    #controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 680px;
+      margin-bottom: 28px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .field input, .field textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.92rem;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--bg);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .field input:focus, .field textarea:focus { border-color: var(--accent); }
+
+    .field textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .field .hint {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .row .field { flex: 1 1 160px; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    button {
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.85; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost   { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-print   { background: #1c1f2a; color: #fff; }
+
+    /* ── Card grid ──────────────────────────────────────────── */
+    #card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      max-width: 960px;
+    }
+
+    /* Each student card */
+    .student-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .card-school {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .card-qr {
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* QRCode.js injects a canvas or img inside here */
+    .card-qr canvas, .card-qr img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    .card-name {
+      font-size: 1rem;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .card-grade {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* ── Print styles ───────────────────────────────────────── */
+    @media print {
+      body { background: white; padding: 0; }
+      h1, .subtitle, #controls, #print-bar { display: none !important; }
+
+      #card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        max-width: 100%;
+        padding: 0;
+      }
+
+      .student-card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 12px 10px 10px;
+        gap: 8px;
+      }
+
+      .card-qr { width: 130px; height: 130px; }
+      .card-name { font-size: 0.9rem; }
+    }
+
+    /* ── Print bar ──────────────────────────────────────────── */
+    #print-bar {
+      max-width: 960px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    #print-bar h2 {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    #empty-state {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      padding: 20px 0;
+    }
+
+    /* ── Single preview ─────────────────────────────────────── */
+    #single-preview-wrap {
+      margin-top: 16px;
+      display: none;
+    }
+    #single-preview-wrap.visible { display: block; }
+
+    #single-preview-wrap h3 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    #single-preview {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    #qr-value-display {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: monospace;
+      word-break: break-all;
+      text-align: center;
+      max-width: 200px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Student QR Code Generator</h1>
+<p class="subtitle">
+  Generate printable attendance QR codes for your students.
+  Each code encodes the student's name and school name — scanning it later
+  will check them in automatically.
+</p>
+
+<!-- Controls -->
+<div id="controls">
+
+  <div class="row">
+    <div class="field">
+      <label>School Name</label>
+      <input type="text" id="school-input" placeholder="My School" value="" />
+      <div class="hint">Must match exactly what you enter in the scanner settings.</div>
+    </div>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--border); margin: 16px 0;" />
+
+  <!-- Single student -->
+  <div class="field">
+    <label>Single Student — Name</label>
+    <input type="text" id="single-name" placeholder="Jane Smith" />
+    <div class="hint">Type the student's full name exactly as it appears in your spreadsheet.</div>
+  </div>
+
+  <div id="single-preview-wrap">
+    <h3>Preview</h3>
+    <div id="single-preview">
+      <div class="card-school" id="sp-school"></div>
+      <div id="sp-qr" style="width:180px;height:180px;display:flex;align-items:center;justify-content:center;"></div>
+      <div class="card-name" id="sp-name"></div>
+      <div class="card-grade" id="sp-value" style="font-family:monospace;font-size:0.68rem;"></div>
+    </div>
+  </div>
+
+  <div class="actions" style="margin-top:12px;">
+    <button class="btn-primary" id="add-single-btn">Add to Sheet</button>
+  </div>
+
+  <hr style="border:none; border-top:1px solid var(--border); margin: 20px 0;" />
+
+  <!-- Bulk import -->
+  <div class="field">
+    <label>Bulk Add — One Name Per Line</label>
+    <textarea id="bulk-names" placeholder="Jane Smith&#10;John Doe&#10;Alice Johnson&#10;…"></textarea>
+    <div class="hint">
+      Paste your student list here. One name per line.
+      You can copy a column from your spreadsheet and paste it directly.
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="add-bulk-btn">Generate All Cards</button>
+    <button class="btn-ghost" id="clear-btn">Clear All Cards</button>
+  </div>
+
+</div>
+
+<!-- Print bar + grid -->
+<div id="print-bar" style="display:none;">
+  <h2 id="card-count-label">0 cards</h2>
+  <button class="btn-print" onclick="window.print()">🖨 Print All Cards</button>
+</div>
+
+<div id="card-grid">
+  <div id="empty-state">No cards yet. Add students above to generate QR codes.</div>
+</div>
+
+<script>
+// ── Config persistence ─────────────────────────────────────────
+var SCHOOL_KEY = "qr_gen_school";
+
+function loadSchool() {
+  return localStorage.getItem(SCHOOL_KEY) || "";
+}
+function saveSchool(name) {
+  localStorage.setItem(SCHOOL_KEY, name);
+}
+
+var schoolInput   = document.getElementById("school-input");
+schoolInput.value = loadSchool();
+
+schoolInput.addEventListener("input", function() {
+  saveSchool(schoolInput.value.trim());
+  updateSinglePreview();
+});
+
+// ── Cards state ───────────────────────────────────────────────
+var cards = []; // [{name, school, qrValue}]
+
+// ── Single student preview ────────────────────────────────────
+var singleNameInput   = document.getElementById("single-name");
+var singlePreviewWrap = document.getElementById("single-preview-wrap");
+var spSchool          = document.getElementById("sp-school");
+var spName            = document.getElementById("sp-name");
+var spValue           = document.getElementById("sp-value");
+var spQrEl            = document.getElementById("sp-qr");
+var spQrInstance      = null;
+
+singleNameInput.addEventListener("input", updateSinglePreview);
+
+function getSchoolName() {
+  return schoolInput.value.trim() || "My School";
+}
+
+function buildQrValue(name, school) {
+  // Format: "Student Name|School Name"
+  // This is deterministic — same name+school always → same QR
+  return name.trim() + "|" + school.trim();
+}
+
+function updateSinglePreview() {
+  var name = singleNameInput.value.trim();
+  if (!name) {
+    singlePreviewWrap.classList.remove("visible");
+    return;
+  }
+
+  var school = getSchoolName();
+  var qrValue = buildQrValue(name, school);
+
+  singlePreviewWrap.classList.add("visible");
+  spSchool.textContent = school;
+  spName.textContent   = name;
+  spValue.textContent  = qrValue;
+
+  // Re-render the QR
+  spQrEl.innerHTML = "";
+  try {
+    new QRCode(spQrEl, {
+      text: qrValue,
+      width: 180, height: 180,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } catch(e) {
+    spQrEl.textContent = "QR error";
+  }
+}
+
+// ── Add single card ───────────────────────────────────────────
+document.getElementById("add-single-btn").addEventListener("click", function() {
+  var name = singleNameInput.value.trim();
+  if (!name) { alert("Please enter a student name."); return; }
+
+  var school = getSchoolName();
+  addCard(name, school);
+  singleNameInput.value = "";
+  singlePreviewWrap.classList.remove("visible");
+  spQrEl.innerHTML = "";
+});
+
+// ── Bulk add ──────────────────────────────────────────────────
+document.getElementById("add-bulk-btn").addEventListener("click", function() {
+  var raw = document.getElementById("bulk-names").value;
+  var lines = raw.split("\n");
+  var school = getSchoolName();
+  var added = 0;
+
+  lines.forEach(function(line) {
+    var name = line.trim();
+    if (!name) return;
+    // Skip duplicates
+    var exists = cards.some(function(c) { return c.name.toLowerCase() === name.toLowerCase(); });
+    if (!exists) {
+      addCard(name, school);
+      added++;
+    }
+  });
+
+  if (added === 0) {
+    alert("No new names to add (duplicates were skipped).");
+  } else {
+    document.getElementById("bulk-names").value = "";
+  }
+});
+
+// ── Clear all ─────────────────────────────────────────────────
+document.getElementById("clear-btn").addEventListener("click", function() {
+  if (cards.length === 0) return;
+  if (!confirm("Clear all " + cards.length + " generated cards?")) return;
+  cards = [];
+  renderGrid();
+});
+
+// ── Add a card to state + re-render ───────────────────────────
+function addCard(name, school) {
+  cards.push({ name: name, school: school, qrValue: buildQrValue(name, school) });
+  renderGrid();
+}
+
+// ── Render the card grid ──────────────────────────────────────
+function renderGrid() {
+  var grid = document.getElementById("card-grid");
+  var printBar = document.getElementById("print-bar");
+  var countLabel = document.getElementById("card-count-label");
+
+  if (cards.length === 0) {
+    grid.innerHTML = '<div id="empty-state">No cards yet. Add students above to generate QR codes.</div>';
+    printBar.style.display = "none";
+    return;
+  }
+
+  printBar.style.display = "flex";
+  countLabel.textContent = cards.length + (cards.length === 1 ? " card" : " cards");
+
+  // Clear grid
+  grid.innerHTML = "";
+
+  cards.forEach(function(card, idx) {
+    var cardEl = document.createElement("div");
+    cardEl.className = "student-card";
+    cardEl.id = "card-" + idx;
+
+    cardEl.innerHTML =
+      '<div class="card-school">' + escHtml(card.school) + '</div>' +
+      '<div class="card-qr" id="qr-' + idx + '"></div>' +
+      '<div class="card-name">' + escHtml(card.name) + '</div>';
+
+    grid.appendChild(cardEl);
+
+    // Render QR code into the qr container
+    // Use setTimeout to let the DOM settle before rendering
+    (function(i, val) {
+      setTimeout(function() {
+        var qrContainer = document.getElementById("qr-" + i);
+        if (!qrContainer) return;
+        try {
+          new QRCode(qrContainer, {
+            text: val,
+            width: 160, height: 160,
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        } catch(e) {
+          qrContainer.textContent = "Error";
+        }
+      }, 0);
+    })(idx, card.qrValue);
+  });
+}
+
+// ── Escape HTML ───────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// ── Init: trigger preview if name already typed ───────────────
+updateSinglePreview();
+</script>
+</body>
+</html>

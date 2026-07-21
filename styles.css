@@ -1,0 +1,123 @@
+/* ============================================================
+   styles.css — Shared base styles
+   Attendance Scanner system
+   ============================================================ */
+
+/* ── Variables ─────────────────────────────────────────────── */
+:root {
+  --bg:       #1b1410;
+  --surface:  #2a1f19;
+  --border:   #4a382d;
+  --accent:   #c8873c;
+  --green:    #4caf7d;
+  --yellow:   #c8a83c;
+  --red:      #c85c3c;
+  --text:     #ede3d8;
+  --muted:    #a89484;
+  --radius:   12px;
+  --font:     sans-serif;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base typography ────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.5;
+  padding: 2rem 1rem 3rem;
+}
+
+h1 { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.25rem; }
+h2 { font-size: 1.25rem; font-weight: 700; }
+h3 { font-size: 1.1rem;  font-weight: 600; }
+
+p  { color: var(--muted); margin-bottom: 1.5rem; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25rem 0;
+}
+
+/* ── Form elements ──────────────────────────────────────────── */
+label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+  padding: 0.55rem 0.75rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+}
+
+textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+/* ── Hint text (below fields) ───────────────────────────────── */
+.hint {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-top: 0.3rem;
+}
+
+/* ── Field wrapper ──────────────────────────────────────────── */
+.field {
+  margin-bottom: 1rem;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+button {
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.6rem 1.4rem;
+  transition: opacity 0.15s;
+}
+
+button:hover { opacity: 0.85; }
+
+.btn-primary { background: var(--accent); color: var(--bg); }
+.btn-ghost   { background: transparent;   color: var(--muted); border: 1px solid var(--border); }
+.btn-dark    { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+/* ── Action row ─────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}

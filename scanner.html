@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Attendance Scanner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="scanner.css" />
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="header">
+    <span id="school-name-display">Attendance Scanner</span>
+    <div id="connection-status">
+      <span id="connection-label">checking…</span>
+      <div id="connection-dot"></div>
+    </div>
+  </div>
+
+  <div id="camera-wrap">
+    <div id="reader"></div>
+    <div id="scan-line"></div>
+    <div id="brackets">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+    </div>
+  </div>
+
+  <div id="result-card" class="state-idle">
+    <div id="result-label">LAST SCAN</div>
+    <div id="result-name">Waiting for scan…</div>
+    <div id="result-meta"></div>
+  </div>
+
+  <div id="recents-wrap">
+    <div id="recents-label">Recent Check-ins</div>
+    <ul id="recents-list">
+      <li><span class="r-name">No scans yet today.</span></li>
+    </ul>
+  </div>
+
+</div>
+
+<div id="settings-btn" title="Settings">⚙</div>
+
+<div id="settings-panel">
+  <div id="settings-inner">
+    <h2>Scanner Settings</h2>
+
+    <div class="field">
+      <label>Backend URL</label>
+      <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/…/exec" />
+      <div class="hint">Paste your Google Apps Script deployment URL here.</div>
+    </div>
+
+    <div class="field">
+      <label>School Name</label>
+      <input type="text" id="cfg-school" placeholder="My School" />
+      <div class="hint">Must match exactly what you enter in the QR Generator.</div>
+    </div>
+
+    <div class="field">
+      <label>Camera</label>
+      <select id="cfg-camera">
+        <option value="environment">Back camera (recommended)</option>
+        <option value="user">Front camera</option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button class="btn-ghost" id="test-btn">Test Connection</button>
+      <span id="test-result"></span>
+    </div>
+
+    <div class="actions">
+      <button class="btn-ghost"    id="settings-cancel">Cancel</button>
+      <button class="btn-primary"  id="settings-save">Save &amp; Restart Scanner</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────
+var CONFIG_KEY = "attendance_scanner_config";
+
+function loadConfig() {
+  try {
+    var raw = localStorage.getItem(CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { url: "", school: "My School", camera: "environment" };
+}
+
+function saveConfig(cfg) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+var cfg = loadConfig();
+
+// ── State ─────────────────────────────────────────────────────
+var scanner          = null;
+var lastScannedValue = "";
+var cooldownMs       = 3000;
+var lastScanTime     = 0;
+var recents          = [];
+
+// ── DOM refs ──────────────────────────────────────────────────
+var elSchoolDisplay  = document.getElementById("school-name-display");
+var elConnectionDot  = document.getElementById("connection-dot");
+var elConnectionLbl  = document.getElementById("connection-label");
+var elResultCard     = document.getElementById("result-card");
+var elResultLabel    = document.getElementById("result-label");
+var elResultName     = document.getElementById("result-name");
+var elResultMeta     = document.getElementById("result-meta");
+var elRecentsList    = document.getElementById("recents-list");
+var elSettingsBtn    = document.getElementById("settings-btn");
+var elSettingsPanel  = document.getElementById("settings-panel");
+var elCfgUrl         = document.getElementById("cfg-url");
+var elCfgSchool      = document.getElementById("cfg-school");
+var elCfgCamera      = document.getElementById("cfg-camera");
+var elTestBtn        = document.getElementById("test-btn");
+var elTestResult     = document.getElementById("test-result");
+var elSettingsSave   = document.getElementById("settings-save");
+var elSettingsCancel = document.getElementById("settings-cancel");
+
+// ── Init ──────────────────────────────────────────────────────
+function init() {
+  elSchoolDisplay.textContent = cfg.school || "Attendance Scanner";
+
+  if (!cfg.url) {
+    setResultState("idle", "Tap ⚙ to enter your backend URL.", "", "");
+    openSettings();
+    return;
+  }
+
+  pingBackend();
+  startScanner();
+}
+
+// ── Connection state ──────────────────────────────────────────
+function pingBackend() {
+  if (!cfg.url) return;
+  setConnectionState("checking");
+  fetch(cfg.url + "?action=ping")
+    .then(function(r) { return r.json(); })
+    .then(function(d) { setConnectionState(d.status === "ok" ? "connected" : "disconnected"); })
+    .catch(function()  { setConnectionState("disconnected"); });
+}
+
+function setConnectionState(state) {
+  elConnectionDot.className = "";
+  if (state === "connected") {
+    elConnectionDot.classList.add("connected");
+    elConnectionLbl.textContent = "connected";
+  } else if (state === "disconnected") {
+    elConnectionDot.classList.add("disconnected");
+    elConnectionLbl.textContent = "offline";
+  } else {
+    elConnectionLbl.textContent = "checking…";
+  }
+}
+
+// ── QR Scanner ────────────────────────────────────────────────
+function startScanner() {
+  if (scanner) { scanner.clear().catch(function(){}); scanner = null; }
+
+  scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    { facingMode: cfg.camera || "environment" },
+    {
+      fps: 10,
+      qrbox: function(w, h) {
+        var side = Math.min(w, h) * 0.70;
+        return { width: side, height: side };
+      },
+      aspectRatio: 1.0,
+      disableFlip: false
+    },
+    onScanSuccess,
+    function() {} // onScanFailure fires constantly when no code visible — ignore
+  ).catch(function(err) {
+    setResultState("error", "Camera error: " + err, "", "");
+  });
+}
+
+function onScanSuccess(decodedText) {
+  var now = Date.now();
+  if (decodedText === lastScannedValue && (now - lastScanTime) < cooldownMs) return;
+
+  lastScannedValue = decodedText;
+  lastScanTime     = now;
+
+  setResultState("loading", decodedText.length > 40 ? decodedText.substring(0, 40) + "…" : decodedText, "", "");
+  sendToBackend(decodedText);
+}
+
+// ── Backend communication ─────────────────────────────────────
+function sendToBackend(qrValue) {
+  if (!cfg.url) {
+    setResultState("error", "No backend URL configured.", "", "");
+    return;
+  }
+
+  fetch(cfg.url + "?action=scan&qrValue=" + encodeURIComponent(qrValue))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      setConnectionState("connected");
+      if (data.status === "ok") {
+        setResultState("ok", data.studentName, data.grade || "", data.timestamp || "");
+        addRecent(data.studentName, "ok");
+      } else if (data.status === "unknown") {
+        setResultState("unknown", data.studentName, "Not on student list — logged anyway", "");
+        addRecent(data.studentName, "unknown");
+      } else {
+        setResultState("error", "Error", data.message || "Unknown error", "");
+        addRecent("Error", "error");
+      }
+    })
+    .catch(function() {
+      setConnectionState("disconnected");
+      setResultState("error", "Connection failed", "Could not reach backend.", "");
+    });
+}
+
+// ── Result card ───────────────────────────────────────────────
+var resetTimer = null;
+
+function setResultState(state, name, meta, timestamp) {
+  elResultCard.className = "state-" + state;
+
+  elResultLabel.textContent =
+    state === "ok"      ? "✓ CHECKED IN"      :
+    state === "unknown" ? "⚠ UNKNOWN STUDENT" :
+    state === "error"   ? "✗ ERROR"            :
+    state === "loading" ? "SCANNING…"          :
+                          "LAST SCAN";
+
+  elResultName.textContent = name;
+
+  var metaText = meta;
+  if (timestamp) {
+    var parts = timestamp.split(" ");
+    if (parts.length > 1) {
+      var t = parts[1].split(":");
+      metaText += "  ·  " + t[0] + ":" + t[1];
+    }
+  }
+  elResultMeta.textContent = metaText;
+
+  // Auto-reset to idle after 4 seconds for non-loading states
+  if (resetTimer) clearTimeout(resetTimer);
+  if (state !== "loading") {
+    resetTimer = setTimeout(function() {
+      setResultState("idle", "Waiting for scan…", "", "");
+    }, 4000);
+  }
+}
+
+// ── Recent scans ──────────────────────────────────────────────
+function addRecent(name, state) {
+  var now = new Date();
+  var t   = now.getHours().toString().padStart(2, "0") + ":" +
+            now.getMinutes().toString().padStart(2, "0");
+  recents.unshift({ name: name, time: t, state: state });
+  if (recents.length > 8) recents.pop();
+  renderRecents();
+}
+
+function renderRecents() {
+  elRecentsList.innerHTML = recents.map(function(r) {
+    return '<li class="r-' + r.state + '">' +
+           '<span class="r-name">' + esc(r.name) + '</span>' +
+           '<span class="r-time">' + r.time + '</span>' +
+           '</li>';
+  }).join("") || '<li><span class="r-name">No scans yet today.</span></li>';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ── Settings panel ────────────────────────────────────────────
+function openSettings() {
+  elCfgUrl.value    = cfg.url    || "";
+  elCfgSchool.value = cfg.school || "";
+  elCfgCamera.value = cfg.camera || "environment";
+  elTestResult.textContent = "";
+  elTestResult.className   = "";
+  elSettingsPanel.classList.add("open");
+}
+
+function closeSettings() {
+  elSettingsPanel.classList.remove("open");
+}
+
+elSettingsBtn.addEventListener("click", openSettings);
+elSettingsCancel.addEventListener("click", closeSettings);
+
+elSettingsSave.addEventListener("click", function() {
+  cfg.url    = elCfgUrl.value.trim();
+  cfg.school = elCfgSchool.value.trim() || "My School";
+  cfg.camera = elCfgCamera.value;
+  saveConfig(cfg);
+  elSchoolDisplay.textContent = cfg.school;
+  closeSettings();
+  pingBackend();
+  startScanner();
+});
+
+elTestBtn.addEventListener("click", function() {
+  var testUrl = elCfgUrl.value.trim();
+  if (!testUrl) {
+    elTestResult.textContent = "Enter a URL first.";
+    elTestResult.className   = "fail";
+    return;
+  }
+  elTestResult.textContent = "Testing…";
+  elTestResult.className   = "";
+
+  fetch(testUrl + "?action=ping")
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status === "ok") {
+        elTestResult.textContent = "✓ Connected!";
+        elTestResult.className   = "ok";
+      } else {
+        elTestResult.textContent = "Response received but status: " + d.status;
+        elTestResult.className   = "warn";
+      }
+    })
+    .catch(function() {
+      elTestResult.textContent = "✗ Could not connect.";
+      elTestResult.className   = "fail";
+    });
+});
+
+// ── Go ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

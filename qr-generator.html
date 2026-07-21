@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Code Generator — Student Attendance Cards</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="qr-generator.css" />
+  <link rel="stylesheet" href="print.css" media="print" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+<h1>Student QR Code Generator</h1>
+<p>
+  Generate printable attendance QR codes for your students.
+  Each code encodes the student's name and school name — scanning it later
+  will check them in automatically.
+</p>
+
+<div id="controls">
+
+  <div class="field">
+    <label>School Name</label>
+    <input type="text" id="school-input" placeholder="My School" />
+    <div class="hint">Must match exactly what you enter in the scanner settings.</div>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label>Single Student — Name</label>
+    <input type="text" id="single-name" placeholder="Jane Smith" />
+    <div class="hint">Type the student's full name exactly as it appears in your spreadsheet.</div>
+  </div>
+
+  <div id="single-preview-wrap">
+    <h3>Preview</h3>
+    <div id="single-preview">
+      <div class="card-school" id="sp-school"></div>
+      <div id="sp-qr"></div>
+      <div class="card-name" id="sp-name"></div>
+      <div id="sp-value"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="add-single-btn">Add to Sheet</button>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label>Bulk Add — One Name Per Line</label>
+    <textarea id="bulk-names" placeholder="Jane Smith&#10;John Doe&#10;Alice Johnson&#10;…"></textarea>
+    <div class="hint">
+      Paste your student list here, one name per line.
+      You can copy a column from your spreadsheet and paste it directly.
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="add-bulk-btn">Generate All Cards</button>
+    <button class="btn-ghost"   id="clear-btn">Clear All Cards</button>
+  </div>
+
+</div>
+
+<div id="print-bar">
+  <h2 id="card-count-label">0 cards</h2>
+  <button class="btn-dark" onclick="window.print()">🖨 Print All Cards</button>
+</div>
+
+<div id="card-grid">
+  <div id="empty-state">No cards yet. Add students above to generate QR codes.</div>
+</div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────
+var SCHOOL_KEY = "qr_gen_school";
+var QR_SIZE    = 180; // pixels — passed to QRCode constructor
+
+// ── School name persistence ───────────────────────────────────
+var schoolInput   = document.getElementById("school-input");
+schoolInput.value = localStorage.getItem(SCHOOL_KEY) || "";
+
+schoolInput.addEventListener("input", function() {
+  localStorage.setItem(SCHOOL_KEY, schoolInput.value.trim());
+  updateSinglePreview();
+});
+
+function getSchoolName() {
+  return schoolInput.value.trim() || "My School";
+}
+
+// ── QR value format ───────────────────────────────────────────
+// "Student Name|School Name" — deterministic, same input = same code
+function buildQrValue(name, school) {
+  return name.trim() + "|" + school.trim();
+}
+
+// ── Cards state ───────────────────────────────────────────────
+var cards = []; // [{name, school, qrValue}]
+
+// ── Single student preview ────────────────────────────────────
+var singleNameInput   = document.getElementById("single-name");
+var singlePreviewWrap = document.getElementById("single-preview-wrap");
+var spSchool          = document.getElementById("sp-school");
+var spName            = document.getElementById("sp-name");
+var spValue           = document.getElementById("sp-value");
+var spQrEl            = document.getElementById("sp-qr");
+
+singleNameInput.addEventListener("input", updateSinglePreview);
+
+function updateSinglePreview() {
+  var name = singleNameInput.value.trim();
+  if (!name) {
+    singlePreviewWrap.classList.remove("visible");
+    return;
+  }
+
+  var school   = getSchoolName();
+  var qrValue  = buildQrValue(name, school);
+
+  spSchool.textContent = school;
+  spName.textContent   = name;
+  spValue.textContent  = qrValue;
+
+  spQrEl.innerHTML = "";
+  new QRCode(spQrEl, {
+    text: qrValue,
+    width: QR_SIZE, height: QR_SIZE,
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  singlePreviewWrap.classList.add("visible");
+}
+
+// ── Add single card ───────────────────────────────────────────
+document.getElementById("add-single-btn").addEventListener("click", function() {
+  var name = singleNameInput.value.trim();
+  if (!name) { alert("Please enter a student name."); return; }
+
+  var school = getSchoolName();
+  cards.push({ name: name, school: school, qrValue: buildQrValue(name, school) });
+
+  singleNameInput.value = "";
+  spQrEl.innerHTML = "";
+  singlePreviewWrap.classList.remove("visible");
+
+  renderGrid();
+});
+
+// ── Bulk add ──────────────────────────────────────────────────
+document.getElementById("add-bulk-btn").addEventListener("click", function() {
+  var lines  = document.getElementById("bulk-names").value.split("\n");
+  var school = getSchoolName();
+  var added  = 0;
+
+  lines.forEach(function(line) {
+    var name = line.trim();
+    if (!name) return;
+    var duplicate = cards.some(function(c) {
+      return c.name.toLowerCase() === name.toLowerCase();
+    });
+    if (!duplicate) {
+      cards.push({ name: name, school: school, qrValue: buildQrValue(name, school) });
+      added++;
+    }
+  });
+
+  if (added === 0) {
+    alert("No new names to add — duplicates were skipped.");
+    return;
+  }
+
+  document.getElementById("bulk-names").value = "";
+  renderGrid();
+});
+
+// ── Clear all ─────────────────────────────────────────────────
+document.getElementById("clear-btn").addEventListener("click", function() {
+  if (cards.length === 0) return;
+  if (!confirm("Clear all " + cards.length + " generated cards?")) return;
+  cards = [];
+  renderGrid();
+});
+
+// ── Render the card grid ──────────────────────────────────────
+// Called ONCE after all state mutations are complete.
+function renderGrid() {
+  var grid       = document.getElementById("card-grid");
+  var printBar   = document.getElementById("print-bar");
+  var countLabel = document.getElementById("card-count-label");
+
+  if (cards.length === 0) {
+    grid.innerHTML = '<div id="empty-state">No cards yet. Add students above to generate QR codes.</div>';
+    printBar.style.display = "none";
+    return;
+  }
+
+  printBar.style.display = "flex";
+  countLabel.textContent = cards.length + (cards.length === 1 ? " card" : " cards");
+
+  // Build all card elements first, append them all, then render QR codes.
+  // This avoids the multiple-render bug: we never call new QRCode()
+  // inside a loop that also calls renderGrid() or touches innerHTML.
+  grid.innerHTML = "";
+
+  var qrTargets = []; // [{el, value}] — filled while building DOM
+
+  cards.forEach(function(card, idx) {
+    var cardEl = document.createElement("div");
+    cardEl.className = "student-card";
+    cardEl.id = "card-" + idx;
+
+    var schoolEl = document.createElement("div");
+    schoolEl.className = "card-school";
+    schoolEl.textContent = card.school;
+
+    var qrEl = document.createElement("div");
+    qrEl.className = "card-qr";
+
+    var nameEl = document.createElement("div");
+    nameEl.className = "card-name";
+    nameEl.textContent = card.name;
+
+    cardEl.appendChild(schoolEl);
+    cardEl.appendChild(qrEl);
+    cardEl.appendChild(nameEl);
+    grid.appendChild(cardEl);
+
+    qrTargets.push({ el: qrEl, value: card.qrValue });
+  });
+
+  // All DOM nodes are in place. Now render QR codes once per card.
+  qrTargets.forEach(function(target) {
+    new QRCode(target.el, {
+      text: target.value,
+      width: QR_SIZE, height: QR_SIZE,
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+}
+</script>
+</body>
+</html>

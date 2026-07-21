@@ -1,0 +1,34 @@
+/* ============================================================
+   print.css — Print-only styles for QR card output
+   Linked from qr-generator.html with media="print"
+   ============================================================ */
+
+body {
+  background: white;
+  color: black;
+  padding: 0;
+}
+
+/* Hide everything except the card grid */
+h1, p, #controls, #print-bar, #single-preview-wrap {
+  display: none !important;
+}
+
+/* Cards flow naturally, no dark theme */
+#card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.student-card {
+  background: white;
+  border: none;
+  color: black;
+  break-inside: avoid;
+}
+
+.card-school, .card-name {
+  color: black;
+}

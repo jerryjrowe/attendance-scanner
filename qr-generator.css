@@ -1,0 +1,120 @@
+/* ============================================================
+   qr-generator.css — Styles specific to the QR generator page
+   ============================================================ */
+
+/* ── Controls panel ─────────────────────────────────────────── */
+#controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  max-width: 680px;
+  margin-bottom: 1.75rem;
+}
+
+/* ── Single-student preview ─────────────────────────────────── */
+#single-preview-wrap {
+  display: none;
+  margin-top: 1rem;
+}
+
+#single-preview-wrap.visible {
+  display: block;
+}
+
+#single-preview {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+/* The QR image container for the single preview */
+#sp-qr {
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Raw QR value shown under the preview */
+#sp-value {
+  font-family: monospace;
+  color: var(--muted);
+  word-break: break-all;
+  text-align: center;
+  max-width: 200px;
+}
+
+/* ── Print bar (card count + print button) ──────────────────── */
+#print-bar {
+  display: none; /* shown by JS when cards exist */
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  max-width: 960px;
+  margin-bottom: 1rem;
+}
+
+/* ── Card grid ──────────────────────────────────────────────── */
+#card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  max-width: 960px;
+}
+
+#empty-state {
+  color: var(--muted);
+  padding: 1.25rem 0;
+}
+
+/* ── Individual student card ────────────────────────────────── */
+.student-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1rem 1rem;
+  break-inside: avoid;
+}
+
+.card-school {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* QRCode.js renders a canvas (hidden) + img (visible) inside here.
+   The img dimensions are set by the JS QRCode constructor.
+   We do NOT override width/height with CSS — that distorts the image.
+   We only ensure the container doesn't collapse. */
+.card-qr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* No explicit width/height — the QR image sets its own size */
+}
+
+/* Hide the canvas QRCode.js leaves behind; only the img is needed */
+.card-qr canvas {
+  display: none;
+}
+
+.card-name {
+  font-weight: 700;
+  text-align: center;
+  word-break: break-word;
+}

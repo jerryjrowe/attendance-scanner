@@ -22,7 +22,6 @@
 
   <div id="camera-wrap">
     <div id="reader"></div>
-    <div id="scan-line"></div>
     <div id="brackets">
       <div class="corner tl"></div>
       <div class="corner tr"></div>
@@ -46,66 +45,23 @@
 
 </div>
 
-<div id="settings-btn" title="Settings">⚙</div>
-
-<div id="settings-panel">
-  <div id="settings-inner">
-    <h2>Scanner Settings</h2>
-
-    <div class="field">
-      <label>Backend URL</label>
-      <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/…/exec" />
-      <div class="hint">Paste your Google Apps Script deployment URL here.</div>
-    </div>
-
-    <div class="field">
-      <label>School Name</label>
-      <input type="text" id="cfg-school" placeholder="My School" />
-      <div class="hint">Must match exactly what you enter in the QR Generator.</div>
-    </div>
-
-    <div class="field">
-      <label>Camera</label>
-      <select id="cfg-camera">
-        <option value="environment">Back camera (recommended)</option>
-        <option value="user">Front camera</option>
-      </select>
-    </div>
-
-    <div class="actions">
-      <button class="btn-ghost" id="test-btn">Test Connection</button>
-      <span id="test-result"></span>
-    </div>
-
-    <div class="actions">
-      <button class="btn-ghost"    id="settings-cancel">Cancel</button>
-      <button class="btn-primary"  id="settings-save">Save &amp; Restart Scanner</button>
-    </div>
-  </div>
-</div>
+<div id="fullscreen-btn" title="Toggle Fullscreen">⛶</div>
+<div id="refresh-btn" title="Refresh Page">⟳</div>
 
 <script>
-// ── Config ────────────────────────────────────────────────────
-var CONFIG_KEY = "attendance_scanner_config";
-
-function loadConfig() {
-  try {
-    var raw = localStorage.getItem(CONFIG_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return { url: "", school: "My School", camera: "environment" };
-}
-
-function saveConfig(cfg) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-}
-
-var cfg = loadConfig();
+// ════════════════════════════════════════════════════════════
+// FIXED CONFIGURATION — edit these three lines, then re-upload
+// this file to GitHub Pages. There is no in-app settings screen.
+// ════════════════════════════════════════════════════════════
+var BACKEND_URL   = "PASTE_YOUR_GOOGLE_APPS_SCRIPT_URL_HERE"; // ends in /exec
+var SCHOOL_NAME   = "Northside";
+var CAMERA_FACING = "user"; // "user" = front camera (faces the person scanning)
+// ════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────
 var scanner          = null;
 var lastScannedValue = "";
-var cooldownMs       = 3000;
+var cooldownMs       = 5000;
 var lastScanTime     = 0;
 var recents          = [];
 
@@ -118,23 +74,16 @@ var elResultLabel    = document.getElementById("result-label");
 var elResultName     = document.getElementById("result-name");
 var elResultMeta     = document.getElementById("result-meta");
 var elRecentsList    = document.getElementById("recents-list");
-var elSettingsBtn    = document.getElementById("settings-btn");
-var elSettingsPanel  = document.getElementById("settings-panel");
-var elCfgUrl         = document.getElementById("cfg-url");
-var elCfgSchool      = document.getElementById("cfg-school");
-var elCfgCamera      = document.getElementById("cfg-camera");
-var elTestBtn        = document.getElementById("test-btn");
-var elTestResult     = document.getElementById("test-result");
-var elSettingsSave   = document.getElementById("settings-save");
-var elSettingsCancel = document.getElementById("settings-cancel");
+var elFullscreenBtn  = document.getElementById("fullscreen-btn");
+var elRefreshBtn     = document.getElementById("refresh-btn");
+var elCameraWrap     = document.getElementById("camera-wrap");
 
 // ── Init ──────────────────────────────────────────────────────
 function init() {
-  elSchoolDisplay.textContent = cfg.school || "Attendance Scanner";
+  elSchoolDisplay.textContent = SCHOOL_NAME;
 
-  if (!cfg.url) {
-    setResultState("idle", "Tap ⚙ to enter your backend URL.", "", "");
-    openSettings();
+  if (BACKEND_URL.indexOf("PASTE_YOUR") !== -1) {
+    setResultState("error", "Backend URL not set.", "Edit BACKEND_URL near the top of scanner.html.", "");
     return;
   }
 
@@ -144,9 +93,8 @@ function init() {
 
 // ── Connection state ──────────────────────────────────────────
 function pingBackend() {
-  if (!cfg.url) return;
   setConnectionState("checking");
-  fetch(cfg.url + "?action=ping")
+  fetch(BACKEND_URL + "?action=ping")
     .then(function(r) { return r.json(); })
     .then(function(d) { setConnectionState(d.status === "ok" ? "connected" : "disconnected"); })
     .catch(function()  { setConnectionState("disconnected"); });
@@ -169,10 +117,14 @@ function setConnectionState(state) {
 function startScanner() {
   if (scanner) { scanner.clear().catch(function(){}); scanner = null; }
 
+  // Front camera reads like a video call unless we mirror the preview —
+  // the raw frames html5-qrcode decodes from are unaffected by this CSS flip.
+  elCameraWrap.classList.toggle("mirrored", CAMERA_FACING === "user");
+
   scanner = new Html5Qrcode("reader");
 
   scanner.start(
-    { facingMode: cfg.camera || "environment" },
+    { facingMode: CAMERA_FACING },
     {
       fps: 10,
       qrbox: function(w, h) {
@@ -202,12 +154,7 @@ function onScanSuccess(decodedText) {
 
 // ── Backend communication ─────────────────────────────────────
 function sendToBackend(qrValue) {
-  if (!cfg.url) {
-    setResultState("error", "No backend URL configured.", "", "");
-    return;
-  }
-
-  fetch(cfg.url + "?action=scan&qrValue=" + encodeURIComponent(qrValue))
+  fetch(BACKEND_URL + "?action=scan&qrValue=" + encodeURIComponent(qrValue))
     .then(function(r) { return r.json(); })
     .then(function(data) {
       setConnectionState("connected");
@@ -285,59 +232,22 @@ function esc(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
-// ── Settings panel ────────────────────────────────────────────
-function openSettings() {
-  elCfgUrl.value    = cfg.url    || "";
-  elCfgSchool.value = cfg.school || "";
-  elCfgCamera.value = cfg.camera || "environment";
-  elTestResult.textContent = "";
-  elTestResult.className   = "";
-  elSettingsPanel.classList.add("open");
-}
-
-function closeSettings() {
-  elSettingsPanel.classList.remove("open");
-}
-
-elSettingsBtn.addEventListener("click", openSettings);
-elSettingsCancel.addEventListener("click", closeSettings);
-
-elSettingsSave.addEventListener("click", function() {
-  cfg.url    = elCfgUrl.value.trim();
-  cfg.school = elCfgSchool.value.trim() || "My School";
-  cfg.camera = elCfgCamera.value;
-  saveConfig(cfg);
-  elSchoolDisplay.textContent = cfg.school;
-  closeSettings();
-  pingBackend();
-  startScanner();
+// ── Fullscreen toggle ─────────────────────────────────────────
+elFullscreenBtn.addEventListener("click", function() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function(){});
+  } else {
+    document.exitFullscreen();
+  }
 });
 
-elTestBtn.addEventListener("click", function() {
-  var testUrl = elCfgUrl.value.trim();
-  if (!testUrl) {
-    elTestResult.textContent = "Enter a URL first.";
-    elTestResult.className   = "fail";
-    return;
-  }
-  elTestResult.textContent = "Testing…";
-  elTestResult.className   = "";
+document.addEventListener("fullscreenchange", function() {
+  elFullscreenBtn.classList.toggle("active", !!document.fullscreenElement);
+});
 
-  fetch(testUrl + "?action=ping")
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.status === "ok") {
-        elTestResult.textContent = "✓ Connected!";
-        elTestResult.className   = "ok";
-      } else {
-        elTestResult.textContent = "Response received but status: " + d.status;
-        elTestResult.className   = "warn";
-      }
-    })
-    .catch(function() {
-      elTestResult.textContent = "✗ Could not connect.";
-      elTestResult.className   = "fail";
-    });
+// ── Refresh ───────────────────────────────────────────────────
+elRefreshBtn.addEventListener("click", function() {
+  location.reload();
 });
 
 // ── Go ────────────────────────────────────────────────────────

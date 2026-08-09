@@ -36,8 +36,9 @@ hosting service provided by GitHub. Nothing costs money.
 
 ## PART 1 — Set Up Your Google Spreadsheet
 
-**Goal:** Create a spreadsheet with the correct tab names and
-columns so the backend knows where to read and write data.
+**Goal:** Get a spreadsheet ready. This can be as simple as a
+completely blank file — there's nothing you're required to
+pre-build.
 
 ### Step 1.1 — Open or create your attendance spreadsheet
 
@@ -45,50 +46,46 @@ columns so the backend knows where to read and write data.
 - If you already have a student list spreadsheet, open it.
   If not, click **+ Blank** to create a new one.
 
-### Step 1.2 — Create the Students tab
+That's it for this part. A single tab named **Attendance**
+creates itself automatically the first time anyone scans a QR
+code — one row per student, with columns that fill in as each
+day happens. You do not need to name any tabs or add any headers
+yourself.
 
-You need a tab (the tabs are at the bottom of the screen) named
-exactly **Students** (capital S, no extra spaces).
+### Optional — a Students roster, for typo protection
 
-- Look at the bottom of the screen for a tab. By default it is
-  called "Sheet1."
-- Double-click the tab name "Sheet1" to rename it.
-- Type: `Students`
+If you want the system to catch typos (a name that doesn't match
+anyone) and auto-fill each student's grade, add a tab named
+exactly **Students** (capital S, no extra spaces):
+
+- Click the **+** button at the bottom of the screen to add a tab.
+- Double-click its name and type: `Students`
 - Press Enter.
+- Click cell **A1** and type the headers exactly as shown:
 
-### Step 1.3 — Fill in the Students tab
+  | A (Column A)   | B (Column B) | C (Column C) |
+  |----------------|--------------|--------------|
+  | Student Name   | Grade        | School       |
 
-Click cell **A1** and type the headers exactly as shown:
+  Then fill in your students starting from row 2:
 
-| A (Column A)   | B (Column B) | C (Column C) |
-|----------------|--------------|--------------|
-| Student Name   | Grade        | School       |
+  | A              | B     | C          |
+  |----------------|-------|------------|
+  | Jane Smith     | 3rd   | My School  |
+  | John Doe       | 4th   | My School  |
+  | Alice Johnson  | 3rd   | My School  |
 
-Then fill in your students starting from row 2:
+  **Important:** The name in column A must match *exactly* what
+  you will type into the QR Generator later (same spelling, same
+  capitalization). The easiest approach: type names here first,
+  then copy-paste them into the QR Generator.
 
-| A              | B     | C          |
-|----------------|-------|------------|
-| Jane Smith     | 3rd   | My School  |
-| John Doe       | 4th   | My School  |
-| Alice Johnson  | 3rd   | My School  |
+  Grade and School (columns B and C) are optional — leave them
+  blank if you don't need that data.
 
-**Important:** The name in column A must match *exactly* what you
-will type into the QR Generator later (same spelling, same
-capitalization). The easiest approach: type names here first,
-then copy-paste them into the QR Generator.
-
-Grade and School (columns B and C) are optional — you can leave
-them blank if you don't need that data.
-
-### Step 1.4 — Create the Attendance tab
-
-- At the bottom of the screen, click the **+** button (it is to
-  the right of your existing tabs) to add a new tab.
-- Double-click the new tab's name and rename it: `Attendance`
-- Press Enter.
-
-You do not need to add any headers to the Attendance tab —
-the system creates them automatically on the first scan.
+If you skip this entirely, every scan is just accepted as-is —
+no warnings, no roster check. You can always add the Students
+tab later; the system checks for it on every scan.
 
 ---
 
@@ -386,10 +383,20 @@ Cards are sized to fit 3 per row on a standard sheet of paper.
 ### To view attendance records:
 
 - Open your Google Spreadsheet.
-- Click the **Attendance** tab at the bottom.
-- Each row is one scan: Timestamp, Date, Student Name, Grade,
-  School, Raw QR Value.
-- You can sort, filter, or query this data however you like.
+- Click the **Attendance** tab at the bottom. This tab is created
+  automatically the first time anyone scans — you don't need to
+  set it up.
+- One row per student (kept alphabetical automatically), and a
+  Check In / Check Out column pair for each day, also created
+  automatically the first time someone scans on a new day.
+- A student's first scan of the day fills in Check In. Every scan
+  after that overwrites Check Out — so the last scan of the day is
+  always what shows there.
+- A student who scans but isn't on your Students list (if you're
+  using one) still gets a row here, highlighted yellow with a ⚠ so
+  you can spot and fix roster gaps. Once you add them to the
+  Students tab, the highlight clears automatically the next time
+  they scan.
 
 ### If a student loses their card:
 
@@ -426,13 +433,13 @@ Cards are sized to fit 3 per row on a standard sheet of paper.
   or in the spreadsheet. Check for extra spaces or different
   capitalization.
 - The scan is still recorded in your Attendance tab, flagged
-  as UNKNOWN.
+  with a ⚠.
 
 **The same student scans twice very quickly**
-- The scanner has a 3-second cooldown per card, so accidental
+- The scanner has a 5-second cooldown per card, so accidental
   double-scans are ignored automatically.
 - If a student intentionally needs to be re-scanned (rare),
-  wait 3 seconds.
+  wait 5 seconds.
 
 **I need to update the student list**
 - Simply edit your Students sheet — add, remove, or correct

@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Attendance Scanner</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="scanner.css" />
@@ -14,9 +17,21 @@
 
   <div id="header">
     <span id="school-name-display">Attendance Scanner</span>
-    <div id="connection-status">
-      <span id="connection-label">checking…</span>
-      <div id="connection-dot"></div>
+    <div id="header-controls">
+      <div id="connection-status">
+        <span id="connection-label">checking…</span>
+        <div id="connection-dot"></div>
+      </div>
+      <button id="fullscreen-btn" type="button" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+          <path id="fullscreen-icon-path" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+      </button>
+      <button id="refresh-btn" type="button" title="Force Refresh" aria-label="Force Refresh">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08a5.99 5.99 0 01-5.65 4c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -45,15 +60,12 @@
 
 </div>
 
-<div id="fullscreen-btn" title="Toggle Fullscreen">⛶</div>
-<div id="refresh-btn" title="Refresh Page">⟳</div>
-
 <script>
 // ════════════════════════════════════════════════════════════
 // FIXED CONFIGURATION — edit these three lines, then re-upload
 // this file to GitHub Pages. There is no in-app settings screen.
 // ════════════════════════════════════════════════════════════
-var BACKEND_URL   = "https://script.google.com/macros/s/AKfycbz1wqF_FyCU0H_1mxGA1lRwjh0CWdrzw5l_UE9eIsLV5rS4powyF-Js0wPx67vlPIkv/exec";
+var BACKEND_URL   = "https://script.google.com/macros/s/AKfycbxq9ZFkuPd5pMFsgGtaWOBg95sOQJo-S3j8Z6prLxq7Z0npwmvW5tyrgKTtJYKeZDc_/exec";
 var SCHOOL_NAME   = "Northside";
 var CAMERA_FACING = "user"; // "user" = front camera (faces the person scanning)
 // ════════════════════════════════════════════════════════════
@@ -75,8 +87,12 @@ var elResultName     = document.getElementById("result-name");
 var elResultMeta     = document.getElementById("result-meta");
 var elRecentsList    = document.getElementById("recents-list");
 var elFullscreenBtn  = document.getElementById("fullscreen-btn");
+var elFullscreenIcon = document.getElementById("fullscreen-icon-path");
 var elRefreshBtn     = document.getElementById("refresh-btn");
 var elCameraWrap     = document.getElementById("camera-wrap");
+
+var ICON_FULLSCREEN_ENTER = "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z";
+var ICON_FULLSCREEN_EXIT  = "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z";
 
 // ── Init ──────────────────────────────────────────────────────
 function init() {
@@ -242,12 +258,17 @@ elFullscreenBtn.addEventListener("click", function() {
 });
 
 document.addEventListener("fullscreenchange", function() {
-  elFullscreenBtn.classList.toggle("active", !!document.fullscreenElement);
+  var isFullscreen = !!document.fullscreenElement;
+  elFullscreenBtn.classList.toggle("active", isFullscreen);
+  elFullscreenIcon.setAttribute("d", isFullscreen ? ICON_FULLSCREEN_EXIT : ICON_FULLSCREEN_ENTER);
 });
 
-// ── Refresh ───────────────────────────────────────────────────
+// ── Force refresh ─────────────────────────────────────────────
+// A plain reload() can still be served from cache. Navigating to a
+// URL with a unique query string forces the browser to treat this
+// page as new and fetch it fresh from the network.
 elRefreshBtn.addEventListener("click", function() {
-  location.reload();
+  location.href = location.pathname + "?forcerefresh=" + Date.now();
 });
 
 // ── Go ────────────────────────────────────────────────────────
